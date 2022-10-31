@@ -1,22 +1,6 @@
-use bevy::prelude::*;
+use bevy::{input::keyboard::keyboard_input_system, prelude::*};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
-
-pub trait MoveTowards {
-    fn move_towards(&self, rhs: Vec3, max_distance: f32) -> Vec3;
-}
-
-impl MoveTowards for Vec3 {
-    fn move_towards(&self, rhs: Vec3, max_distance: f32) -> Vec3 {
-        let distance = self.distance(rhs);
-        if distance < max_distance {
-            rhs
-        } else {
-            let lerp_amount = max_distance / distance;
-            self.lerp(rhs, lerp_amount)
-        }
-    }
-}
 
 fn main() {
     App::new()
@@ -26,21 +10,27 @@ fn main() {
         .add_plugin(WorldInspectorPlugin::new())
         .register_type::<Hover>()
         .register_type::<Movement>()
+        .register_type::<CameraController>()
         .add_startup_system(setup_graphics)
         .add_startup_system(setup_physics)
         .add_system(handle_hover)
         .add_system(handle_movement)
         .add_system(player_input)
         .add_system(dumb_drag)
+        .add_system(update_camera_target_position)
+        .add_system(lerp_to_camera_position.after(update_camera_target_position))
+        .add_system(rotate_camera)
         .run();
 }
 
 fn setup_graphics(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
-    commands.spawn_bundle(Camera3dBundle {
-        transform: Transform::from_xyz(40.0, 20.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
-        ..Default::default()
-    });
+    commands
+        .spawn_bundle(Camera3dBundle {
+            transform: Transform::from_xyz(40.0, 20.0, 30.0).looking_at(Vec3::ZERO, Vec3::Y),
+            ..Default::default()
+        })
+        .insert(CameraController::default());
 }
 
 fn setup_physics(mut commands: Commands) {
@@ -85,6 +75,78 @@ fn setup_physics(mut commands: Commands) {
         .insert(Collider::capsule_y(1.0, 1.0))
         .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)))
         .insert(Name::new("Player"));
+}
+
+#[derive(Reflect, Component)]
+#[reflect(Component)]
+pub struct CameraController {
+    pub z_distance: f32,
+    pub y_distance: f32,
+    pub angle: f32,
+    pub easing: f32,
+    pub target_position: Vec3,
+    pub player_position: Vec3,
+}
+
+impl Default for CameraController {
+    fn default() -> Self {
+        CameraController {
+            z_distance: 36.0,
+            y_distance: 24.0,
+            angle: 0.0,
+            easing: 4.0,
+            target_position: Vec3::ZERO,
+            player_position: Vec3::ZERO,
+        }
+    }
+}
+
+fn update_camera_target_position(
+    mut camera_query: Query<&mut CameraController>,
+    player_query: Query<&Transform, With<Player>>,
+) {
+    let mut camera = camera_query.single_mut();
+    let player_transform = player_query.single();
+
+    let mut starting_transform = player_transform.clone();
+    starting_transform.rotate_y(camera.angle.to_radians());
+    let dir = starting_transform.forward().normalize();
+    camera.target_position =
+        starting_transform.translation + (dir * camera.z_distance) + (Vec3::Y * camera.y_distance);
+    camera.player_position = player_transform.translation;
+}
+
+fn lerp_to_camera_position(
+    time: Res<Time>,
+    mut camera_query: Query<(&mut Transform, &CameraController)>,
+) {
+    for (mut transform, camera_controller) in &mut camera_query {
+        let lerped_position = transform.translation.lerp(
+            camera_controller.target_position,
+            time.delta_seconds() * camera_controller.easing,
+        );
+        transform.translation = lerped_position;
+        transform.look_at(camera_controller.player_position, Vec3::Y);
+    }
+}
+
+fn rotate_camera(
+    time: Res<Time>,
+    keyboard: Res<Input<KeyCode>>,
+    mut camera_query: Query<&mut CameraController>,
+) {
+    let mut camera = camera_query.single_mut();
+
+    if keyboard.pressed(KeyCode::Q) {
+        camera.angle -= 30.0 * time.delta_seconds();
+    }
+    if keyboard.pressed(KeyCode::E) {
+        camera.angle += 30.0 * time.delta_seconds();
+    }
+
+    if camera.angle > 360.0 {
+        camera.angle -= 360.0;
+    }
 }
 
 #[derive(Component)]
@@ -136,27 +198,16 @@ pub fn handle_hover(
                 let hit_point = ray_pos + ray_dir * toi;
                 let distance = hit_point.distance(transform.translation);
 
-                // Make us float
-                // otherVel = velo of what we hit
-                // other_rb = rigidbody we hit
-                //
-                // rayDirVel = dot of down (the rayDir) and our linear velocity
                 let ray_direction_velocity = ray_dir.dot(velocity.linvel);
                 let opposite_relative = ray_dir.dot(Vec3::ZERO);
 
                 let relative_velocity = ray_direction_velocity - opposite_relative;
-                // otherDirVel = same for the other body
-                //
-                // relVel = rayDirVel - otherDirVel
-                //
+
                 let force_direction = distance - hover.ride_height;
                 let up_force = force_direction * hover.strength;
                 let damping_force = relative_velocity * hover.damper;
                 let spring_force = up_force - damping_force;
                 external_force.force.y = spring_force * -1.0;
-                // x?? = hitDistance - hover.ride_height
-                // spring_force = (x * hover.strength) - (relVel * hover.damper)
-                // AddForce to our body equal to RayDir * spring_force
             } else {
                 external_force.force.y = 0.0;
             }
