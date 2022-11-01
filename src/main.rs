@@ -14,6 +14,10 @@ fn main() {
         .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::new())
+        .insert_resource(RapierConfiguration {
+            gravity: Vec3::Y * -30.0,
+            ..default()
+        })
         .add_plugin(CameraPlugin)
         .add_plugin(PhysicsPlugin)
         .add_startup_system(setup_physics)
@@ -53,6 +57,7 @@ fn setup_physics(mut commands: Commands) {
         .insert(RigidBody::Dynamic)
         .insert(Velocity::default())
         .insert(ExternalForce::default())
+        .insert(ExternalImpulse::default())
         .insert(LockedAxes::ROTATION_LOCKED)
         .insert(Hover::default())
         .insert(Movement {
@@ -70,13 +75,22 @@ fn setup_physics(mut commands: Commands) {
 pub struct Player;
 
 pub fn player_input(
+    mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
-    mut player_query: Query<&mut Movement, With<Player>>,
+    mut player_query: Query<
+        (
+            &mut ExternalImpulse,
+            &mut Movement,
+            &mut Velocity,
+            Option<&Grounded>,
+        ),
+        With<Player>,
+    >,
     camera_query: Query<&Transform, With<Camera3d>>,
 ) {
     let camera_transform = camera_query.single();
 
-    for mut player_movement in &mut player_query {
+    for (mut impulse, mut player_movement, mut velocity, is_grounded) in &mut player_query {
         let mut x = 0.0;
         let mut z = 0.0;
 
@@ -102,6 +116,13 @@ pub fn player_input(
 
         if keyboard.pressed(KeyCode::D) {
             x -= 1.0;
+        }
+
+        if keyboard.just_pressed(KeyCode::Space) {
+            if let Some(_) = is_grounded {
+                velocity.linvel.y = 0.0;
+                impulse.impulse = Vec3::Y * 300.0;
+            }
         }
 
         let left_vec: Vec3 = x * left;

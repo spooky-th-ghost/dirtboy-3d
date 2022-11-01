@@ -13,6 +13,9 @@ impl Plugin for PhysicsPlugin {
     }
 }
 
+#[derive(Component)]
+pub struct Grounded;
+
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
 pub struct Movement {
@@ -29,6 +32,17 @@ pub struct Hover {
     pub damper: f32,
 }
 
+impl Default for Hover {
+    fn default() -> Self {
+        Hover {
+            ray_length: 4.0,
+            ride_height: 2.8,
+            strength: 900.0,
+            damper: 60.0,
+        }
+    }
+}
+
 #[derive(Reflect, Component)]
 #[reflect(Component)]
 pub struct Deceleration(pub f32);
@@ -39,50 +53,53 @@ impl Default for Deceleration {
     }
 }
 
-impl Default for Hover {
-    fn default() -> Self {
-        Hover {
-            ray_length: 4.0,
-            ride_height: 2.8,
-            strength: 700.0,
-            damper: 50.0,
-        }
-    }
-}
-
 pub fn handle_hover(
+    mut commands: Commands,
     rapier_context: Res<RapierContext>,
-    mut hover_query: Query<(&mut ExternalForce, &Velocity, &Transform, &Hover, Entity)>,
+    mut hover_query: Query<(
+        &mut ExternalForce,
+        &Velocity,
+        &Transform,
+        &Hover,
+        Option<&Grounded>,
+        Entity,
+    )>,
 ) {
-    for (mut external_force, velocity, transform, hover, hover_entity) in &mut hover_query {
+    for (mut external_force, velocity, transform, hover, is_grounded, hover_entity) in
+        &mut hover_query
+    {
         let ray_pos = transform.translation;
         let ray_dir = Vec3::Y * -1.0;
         let max_toi = hover.ray_length;
         let solid = true;
-        let filter = QueryFilter::exclude_dynamic();
+        let filter = QueryFilter::exclude_dynamic().exclude_sensors();
 
-        if let Some((entity, toi)) =
+        if let Some((_entity, toi)) =
             rapier_context.cast_ray(ray_pos, ray_dir, max_toi, solid, filter)
         {
-            if hover_entity != entity {
-                let hit_point = ray_pos + ray_dir * toi;
-                let distance = hit_point.distance(transform.translation);
+            let hit_point = ray_pos + ray_dir * toi;
+            let distance = hit_point.distance(transform.translation);
 
-                let ray_direction_velocity = ray_dir.dot(velocity.linvel);
-                let opposite_relative = ray_dir.dot(Vec3::ZERO);
+            let ray_direction_velocity = ray_dir.dot(velocity.linvel);
+            let opposite_relative = ray_dir.dot(Vec3::ZERO);
 
-                let relative_velocity = ray_direction_velocity - opposite_relative;
+            let relative_velocity = ray_direction_velocity - opposite_relative;
 
-                let force_direction = distance - hover.ride_height;
-                let up_force = force_direction * hover.strength;
-                let damping_force = relative_velocity * hover.damper;
-                let spring_force = up_force - damping_force;
-                external_force.force.y = spring_force * -1.0;
-            } else {
-                external_force.force.y = 0.0;
+            let force_direction = distance - hover.ride_height;
+            let up_force = force_direction * hover.strength;
+            let damping_force = relative_velocity * hover.damper;
+            let spring_force = up_force - damping_force;
+            external_force.force.y = spring_force * -1.0;
+            if distance <= hover.ride_height {
+                if let None = is_grounded {
+                    commands.entity(hover_entity).insert(Grounded);
+                }
             }
         } else {
             external_force.force.y = 0.0;
+            if let Some(_) = is_grounded {
+                commands.entity(hover_entity).remove::<Grounded>();
+            }
         }
     }
 }
