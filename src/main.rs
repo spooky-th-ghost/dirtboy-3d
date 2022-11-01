@@ -29,21 +29,34 @@ fn main() {
         .run();
 }
 
-fn setup_physics(mut commands: Commands) {
+fn setup_physics(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     /* Create the ground */
     commands
         .spawn()
         .insert(Collider::cuboid(100.0, 0.1, 100.0))
         .insert(RigidBody::Fixed)
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, -4.0, 0.0)));
+        .insert_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(200.0, 0.2, 200.0))),
+            material: materials.add(Color::rgb(0.67, 0.84, 0.92).into()),
+            transform: Transform::from_xyz(0.0, -4.0, 0.0),
+            ..default()
+        });
 
     commands
         .spawn()
         .insert(Collider::cuboid(10.0, 0.1, 20.0))
         .insert(RigidBody::Fixed)
-        .insert_bundle(TransformBundle::from(
-            Transform::from_xyz(5.0, -4.0, 0.0).with_rotation(Quat::from_rotation_z(0.3)),
-        ));
+        .insert_bundle(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(20.0, 0.2, 40.0))),
+            transform: Transform::from_xyz(5.0, -4.0, 0.0)
+                .with_rotation(Quat::from_rotation_z(0.3)),
+            material: materials.add(Color::rgb(0.37, 0.34, 0.32).into()),
+            ..default()
+        });
 
     commands
         .spawn()
