@@ -27,8 +27,8 @@ pub struct CameraController {
 impl Default for CameraController {
     fn default() -> Self {
         CameraController {
-            z_distance: 36.0,
-            y_distance: 24.0,
+            z_distance: 30.0,
+            y_distance: 10.0,
             angle: 0.0,
             easing: 4.0,
             target_position: Vec3::ZERO,
@@ -84,13 +84,17 @@ fn rotate_camera(
     let mut camera = camera_query.single_mut();
 
     if keyboard.pressed(KeyCode::Q) {
-        camera.angle -= 30.0 * time.delta_seconds();
+        camera.angle -= 45.0 * time.delta_seconds();
     }
     if keyboard.pressed(KeyCode::E) {
-        camera.angle += 30.0 * time.delta_seconds();
+        camera.angle += 45.0 * time.delta_seconds();
     }
 
     if camera.angle > 360.0 {
         camera.angle -= 360.0;
+    }
+
+    if camera.angle < -360.0 {
+        camera.angle += 360.0;
     }
 }
