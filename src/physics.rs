@@ -18,7 +18,6 @@ impl Plugin for PhysicsPlugin {
 pub struct Movement {
     pub direction: Vec3,
     pub acceleration: f32,
-    pub deceleration: f32,
 }
 
 #[derive(Reflect, Component)]
@@ -28,6 +27,16 @@ pub struct Hover {
     pub ride_height: f32,
     pub strength: f32,
     pub damper: f32,
+}
+
+#[derive(Reflect, Component)]
+#[reflect(Component)]
+pub struct Deceleration(pub f32);
+
+impl Default for Deceleration {
+    fn default() -> Self {
+        Deceleration(2.5)
+    }
 }
 
 impl Default for Hover {
@@ -107,11 +116,11 @@ pub fn handle_movement(mut movement_query: Query<(&mut ExternalForce, &Movement,
     }
 }
 
-pub fn dumb_drag(time: Res<Time>, mut body_query: Query<(&mut Velocity, &Movement)>) {
-    for (mut velo, movement) in &mut body_query {
+pub fn dumb_drag(time: Res<Time>, mut body_query: Query<(&mut Velocity, &Deceleration)>) {
+    for (mut velo, deceleration) in &mut body_query {
         let lerped_vector = velo
             .linvel
-            .lerp(Vec3::ZERO, time.delta_seconds() * movement.deceleration);
+            .lerp(Vec3::ZERO, time.delta_seconds() * deceleration.0);
         velo.linvel.x = lerped_vector.x;
         velo.linvel.z = lerped_vector.z;
     }

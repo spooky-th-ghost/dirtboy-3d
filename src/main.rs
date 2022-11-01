@@ -44,6 +44,7 @@ fn setup_physics(mut commands: Commands) {
         .insert(Velocity::default())
         .insert(ExternalForce::default())
         .insert(Hover::default())
+        .insert(Deceleration(1.0))
         .insert_bundle(TransformBundle::from(Transform::from_xyz(6.0, 0.0, 6.0)));
 
     /* Create the player */
@@ -57,8 +58,8 @@ fn setup_physics(mut commands: Commands) {
         .insert(Movement {
             direction: Vec3::ZERO,
             acceleration: 300.0,
-            deceleration: 2.5,
         })
+        .insert(Deceleration::default())
         .insert(Player)
         .insert(Collider::capsule_y(1.0, 1.0))
         .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)))
