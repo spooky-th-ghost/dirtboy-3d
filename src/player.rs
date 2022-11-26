@@ -1,4 +1,4 @@
-use crate::{Deceleration, Grounded, Hover, Movement};
+use crate::{Deceleration, Grounded, Hover, Movement, RotationDriver};
 use bevy::prelude::*;
 use bevy_rapier3d::prelude::*;
 pub struct PlayerPlugin;
@@ -15,26 +15,26 @@ pub struct Player;
 
 fn spawn_player(mut commands: Commands) {
     commands
-        .spawn()
-        .insert(RigidBody::Dynamic)
+        .spawn(RigidBody::Dynamic)
         .insert(Velocity::default())
         .insert(ExternalForce::default())
         .insert(ExternalImpulse::default())
         .insert(LockedAxes::ROTATION_LOCKED)
         .insert(Hover::default())
         .insert(Movement {
+            goal_velocity: Vec3::ZERO,
             direction: Vec3::ZERO,
-            acceleration: 300.0,
+            acceleration: 500.0,
         })
+        .insert(RotationDriver::default())
         .insert(Deceleration::default())
         .insert(Player)
         .insert(Collider::capsule_y(1.0, 1.0))
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)))
+        .insert(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)))
         .insert(Name::new("Player"));
 }
 
 pub fn player_input(
-    mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
     mut player_query: Query<
         (

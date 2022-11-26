@@ -36,10 +36,9 @@ fn setup_physics(
 ) {
     /* Create the ground */
     commands
-        .spawn()
-        .insert(Collider::cuboid(100.0, 0.1, 100.0))
+        .spawn(Collider::cuboid(100.0, 0.1, 100.0))
         .insert(RigidBody::Fixed)
-        .insert_bundle(PbrBundle {
+        .insert(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Box::new(200.0, 0.2, 200.0))),
             material: materials.add(Color::rgb(0.67, 0.84, 0.92).into()),
             transform: Transform::from_xyz(0.0, -4.0, 0.0),
@@ -47,10 +46,9 @@ fn setup_physics(
         });
 
     commands
-        .spawn()
-        .insert(Collider::cuboid(10.0, 0.1, 20.0))
+        .spawn(Collider::cuboid(10.0, 0.1, 20.0))
         .insert(RigidBody::Fixed)
-        .insert_bundle(PbrBundle {
+        .insert(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Box::new(20.0, 0.2, 40.0))),
             transform: Transform::from_xyz(5.0, -4.0, 0.0)
                 .with_rotation(Quat::from_rotation_z(0.3)),
@@ -59,12 +57,22 @@ fn setup_physics(
         });
 
     commands
-        .spawn()
-        .insert(Collider::cuboid(1.0, 1.0, 1.0))
+        .spawn(Collider::cuboid(5.0, 0.25, 5.0))
+        .insert(RigidBody::Fixed)
+        .insert(Spring::default())
+        .insert(PbrBundle {
+            mesh: meshes.add(Mesh::from(shape::Box::new(10.0, 0.5, 10.0))),
+            transform: Transform::from_xyz(-8.0, 1.0, 0.0),
+            material: materials.add(Color::rgb(0.37, 0.34, 0.32).into()),
+            ..default()
+        });
+
+    commands
+        .spawn(Collider::cuboid(1.0, 1.0, 1.0))
         .insert(RigidBody::Dynamic)
         .insert(Velocity::default())
         .insert(ExternalForce::default())
         .insert(Hover::default())
         .insert(Deceleration(1.0))
-        .insert_bundle(TransformBundle::from(Transform::from_xyz(6.0, 0.0, 6.0)));
+        .insert(TransformBundle::from(Transform::from_xyz(6.0, 0.0, 6.0)));
 }

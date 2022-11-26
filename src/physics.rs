@@ -7,8 +7,10 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.register_type::<Hover>()
             .register_type::<Movement>()
+            .register_type::<Spring>()
             .add_system(handle_hover)
             .add_system(handle_movement)
+            //            .add_system(drive_rotation)
             .add_system(dumb_drag);
     }
 }
@@ -19,8 +21,24 @@ pub struct Grounded;
 #[derive(Reflect, Component, Default)]
 #[reflect(Component)]
 pub struct Movement {
+    pub goal_velocity: Vec3,
     pub direction: Vec3,
     pub acceleration: f32,
+}
+
+#[derive(Component)]
+pub struct RotationDriver {
+    pub up_vector: Vec3,
+    pub look_target: Vec3,
+}
+
+impl Default for RotationDriver {
+    fn default() -> Self {
+        RotationDriver {
+            up_vector: Vec3::Y,
+            look_target: Vec3::Z,
+        }
+    }
 }
 
 #[derive(Reflect, Component)]
@@ -32,6 +50,20 @@ pub struct Hover {
     pub damper: f32,
 }
 
+impl Hover {
+    pub fn calculate_spring_force(&self, distance: f32, linear_velocity: Vec3) -> f32 {
+        let ray_direction = Vec3::Y * -1.0;
+        let ray_direction_velocity = ray_direction.dot(linear_velocity);
+        let opposite_relative = ray_direction.dot(Vec3::ZERO);
+        let relative_velocity = ray_direction_velocity - opposite_relative;
+        let force_direction = distance - self.ride_height;
+        let up_force = force_direction * self.strength;
+        let damping_force = relative_velocity * self.damper;
+        let spring_force = up_force - damping_force;
+        spring_force * -1.0
+    }
+}
+
 impl Default for Hover {
     fn default() -> Self {
         Hover {
@@ -40,6 +72,16 @@ impl Default for Hover {
             strength: 900.0,
             damper: 60.0,
         }
+    }
+}
+
+#[derive(Component, Reflect)]
+#[reflect(Component)]
+pub struct Spring(pub f32);
+
+impl Default for Spring {
+    fn default() -> Self {
+        Spring(200.0)
     }
 }
 
@@ -58,39 +100,49 @@ pub fn handle_hover(
     rapier_context: Res<RapierContext>,
     mut hover_query: Query<(
         &mut ExternalForce,
-        &Velocity,
+        &mut ExternalImpulse,
+        &mut Velocity,
         &Transform,
         &Hover,
+        Option<&mut RotationDriver>,
         Option<&Grounded>,
         Entity,
     )>,
+    springs: Query<(Entity, &Spring)>,
 ) {
-    for (mut external_force, velocity, transform, hover, is_grounded, hover_entity) in
-        &mut hover_query
+    for (
+        mut external_force,
+        mut external_impulse,
+        mut velocity,
+        transform,
+        hover,
+        should_rotate,
+        is_grounded,
+        hover_entity,
+    ) in &mut hover_query
     {
         let ray_pos = transform.translation;
         let ray_dir = Vec3::Y * -1.0;
-        let max_toi = hover.ray_length;
+        let max_distance = hover.ray_length;
         let solid = true;
         let filter = QueryFilter::exclude_dynamic().exclude_sensors();
 
-        if let Some((_entity, toi)) =
-            rapier_context.cast_ray(ray_pos, ray_dir, max_toi, solid, filter)
+        if let Some((entity, intersection)) =
+            rapier_context.cast_ray_and_get_normal(ray_pos, ray_dir, max_distance, solid, filter)
         {
-            let hit_point = ray_pos + ray_dir * toi;
-            let distance = hit_point.distance(transform.translation);
-
-            let ray_direction_velocity = ray_dir.dot(velocity.linvel);
-            let opposite_relative = ray_dir.dot(Vec3::ZERO);
-
-            let relative_velocity = ray_direction_velocity - opposite_relative;
-
-            let force_direction = distance - hover.ride_height;
-            let up_force = force_direction * hover.strength;
-            let damping_force = relative_velocity * hover.damper;
-            let spring_force = up_force - damping_force;
-            external_force.force.y = spring_force * -1.0;
-            if distance <= hover.ride_height {
+            if springs.contains(entity) {
+                if let Ok((_, spring)) = springs.get(entity) {
+                    velocity.linvel.y = 0.0;
+                    external_impulse.impulse = intersection.normal * spring.0;
+                    return;
+                }
+            }
+            external_force.force.y =
+                hover.calculate_spring_force(intersection.toi, velocity.linvel);
+            if intersection.toi <= hover.ride_height {
+                if let Some(mut rotation_driver) = should_rotate {
+                    rotation_driver.up_vector = intersection.normal;
+                }
                 if let None = is_grounded {
                     commands.entity(hover_entity).insert(Grounded);
                 }
@@ -104,8 +156,15 @@ pub fn handle_hover(
     }
 }
 
-pub fn handle_movement(mut movement_query: Query<(&mut ExternalForce, &Movement, &Velocity)>) {
-    for (mut external_force, movement, velocity) in &mut movement_query {
+pub fn handle_movement(
+    mut movement_query: Query<(
+        &mut ExternalForce,
+        &Movement,
+        &Velocity,
+        Option<&mut RotationDriver>,
+    )>,
+) {
+    for (mut external_force, movement, velocity, should_rotate) in &mut movement_query {
         let mut flat_direction = movement.direction;
         let mut flat_velo = velocity.linvel;
         flat_direction.y = 0.0;
@@ -130,11 +189,61 @@ pub fn handle_movement(mut movement_query: Query<(&mut ExternalForce, &Movement,
 
         let y_force = external_force.force.y;
         external_force.force = Vec3::new(force_to_add.x, y_force, force_to_add.z);
+
+        if let Some(mut rotation_driver) = should_rotate {
+            let new_target = movement.direction.normalize_or_zero();
+            if new_target != Vec3::ZERO {
+                rotation_driver.look_target = new_target;
+            }
+        }
     }
 }
 
-pub fn dumb_drag(time: Res<Time>, mut body_query: Query<(&mut Velocity, &Deceleration)>) {
-    for (mut velo, deceleration) in &mut body_query {
+pub fn advanced_movement(
+    time: Res<Time>,
+    mut movement_query: Query<(&mut ExternalForce, &mut Movement, &Velocity)>,
+) {
+    for (mut external_force, mut movement, velocity) in &mut movement_query {
+        let max_speed = 8.0;
+        let accel = 500.0;
+        let max_accel_force = 150.0;
+
+        let mut new_goal_vel = movement.direction.normalize_or_zero() * max_speed;
+        new_goal_vel.y = 0.0;
+        let updated_goal_velocity = move_towards(
+            movement.goal_velocity,
+            new_goal_vel + velocity.linvel,
+            accel * time.delta_seconds(),
+        );
+
+        if updated_goal_velocity.is_finite() {
+            movement.goal_velocity = updated_goal_velocity;
+        }
+
+        let required_accel = (movement.goal_velocity - velocity.linvel) / time.delta_seconds();
+
+        let mut final_accel = required_accel.clamp_length_max(max_accel_force);
+        final_accel.y = 0.0;
+        if final_accel.is_finite() {
+            external_force.force = final_accel;
+        }
+    }
+}
+
+fn move_towards(a: Vec3, b: Vec3, distance: f32) -> Vec3 {
+    let current_distance = a.distance(b);
+    if current_distance < distance {
+        b
+    } else {
+        a.lerp(b, distance / current_distance)
+    }
+}
+
+pub fn dumb_drag(
+    time: Res<Time>,
+    mut body_query: Query<(&mut Velocity, &Deceleration, &Movement)>,
+) {
+    for (mut velo, deceleration, movement) in &mut body_query {
         let lerped_vector = velo
             .linvel
             .lerp(Vec3::ZERO, time.delta_seconds() * deceleration.0);

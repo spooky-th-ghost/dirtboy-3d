@@ -40,7 +40,7 @@ impl Default for CameraController {
 fn setup_camera(mut commands: Commands) {
     // Add a camera so we can see the debug-render.
     commands
-        .spawn_bundle(Camera3dBundle {
+        .spawn(Camera3dBundle {
             transform: Transform::from_xyz(0.0, 0.0, 20.0).looking_at(Vec3::ZERO, Vec3::Y),
             ..Default::default()
         })
@@ -55,6 +55,7 @@ fn update_camera_target_position(
     let player_transform = player_query.single();
 
     let mut starting_transform = player_transform.clone();
+    starting_transform.rotation = Quat::default();
     starting_transform.rotate_y(camera.angle.to_radians());
     let dir = starting_transform.forward().normalize();
     camera.target_position =
