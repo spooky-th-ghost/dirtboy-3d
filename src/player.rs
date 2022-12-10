@@ -1,11 +1,16 @@
-use crate::{Deceleration, Grounded, Hover, Movement, RotationDriver};
-use bevy::prelude::*;
+use crate::{
+    AnimationLibrary, AnimationMarker, AnimationTransitionEvent, Deceleration, Grounded, Hover,
+    Movement, RotationDriver,
+};
+use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::*;
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_startup_system(spawn_player)
+            .insert_resource(AnimationLibrary::default())
             .add_system(player_input);
     }
 }
@@ -13,9 +18,34 @@ impl Plugin for PlayerPlugin {
 #[derive(Component)]
 pub struct Player;
 
-fn spawn_player(mut commands: Commands) {
+fn spawn_player(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    mut animation_library: ResMut<AnimationLibrary>,
+) {
+    animation_library.insert(
+        "player",
+        "run",
+        asset_server.load("models/junkboy.glb#Animation1"),
+    );
+
+    animation_library.insert(
+        "player",
+        "idle",
+        asset_server.load("models/junkboy.glb#Animation0"),
+    );
+
     commands
-        .spawn(RigidBody::Dynamic)
+        .spawn(SceneBundle {
+            scene: asset_server.load("models/junkboy.glb#Scene0"),
+            ..default()
+        })
+        .insert(AnimationMarker::new("player", "idle"))
+        .insert(RigidBody::Dynamic)
+        .insert(Damping {
+            linear_damping: 2.5,
+            ..default()
+        })
         .insert(Velocity::default())
         .insert(ExternalForce::default())
         .insert(ExternalImpulse::default())
@@ -36,11 +66,13 @@ fn spawn_player(mut commands: Commands) {
 
 pub fn player_input(
     keyboard: Res<Input<KeyCode>>,
+    mut animation_writer: EventWriter<AnimationTransitionEvent>,
     mut player_query: Query<
         (
+            Entity,
             &mut ExternalImpulse,
             &mut Movement,
-            &mut Velocity,
+            &Velocity,
             Option<&Grounded>,
         ),
         With<Player>,
@@ -49,7 +81,7 @@ pub fn player_input(
 ) {
     let camera_transform = camera_query.single();
 
-    for (mut impulse, mut player_movement, mut velocity, is_grounded) in &mut player_query {
+    for (entity, mut impulse, mut player_movement, velocity, is_grounded) in &mut player_query {
         let mut x = 0.0;
         let mut z = 0.0;
 
@@ -79,7 +111,7 @@ pub fn player_input(
 
         if keyboard.just_pressed(KeyCode::Space) {
             if let Some(_) = is_grounded {
-                velocity.linvel.y = 0.0;
+                //velocity.linvel.y = 0.0;
                 impulse.impulse = Vec3::Y * 300.0;
             }
         }
@@ -88,6 +120,17 @@ pub fn player_input(
         let forward_vec: Vec3 = z * forward;
 
         let final_vec = left_vec + forward_vec;
+        if final_vec == Vec3::ZERO {
+            animation_writer.send(AnimationTransitionEvent {
+                entity_id: entity,
+                animation_name: "idle".to_string(),
+            });
+        } else {
+            animation_writer.send(AnimationTransitionEvent {
+                entity_id: entity,
+                animation_name: "run".to_string(),
+            });
+        }
 
         player_movement.direction = final_vec;
     }

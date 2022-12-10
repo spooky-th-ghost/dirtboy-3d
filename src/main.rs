@@ -1,6 +1,10 @@
 use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
+use std::f32::consts::PI;
+
+mod animation;
+use animation::*;
 
 mod camera;
 use camera::*;
@@ -24,6 +28,7 @@ fn main() {
         .add_plugin(CameraPlugin)
         .add_plugin(PhysicsPlugin)
         .add_plugin(PlayerPlugin)
+        .add_plugin(SpookyAnimationPlugin)
         .add_startup_system(setup_physics)
         .add_system(player_input)
         .run();
@@ -62,10 +67,15 @@ fn setup_physics(
         .insert(Spring::default())
         .insert(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Box::new(10.0, 0.5, 10.0))),
-            transform: Transform::from_xyz(-8.0, 1.0, 0.0),
+            transform: Transform::from_xyz(-8.0, -1.0, 0.0),
             material: materials.add(Color::rgb(0.37, 0.34, 0.32).into()),
             ..default()
         });
+    // Light
+    commands.insert_resource(AmbientLight {
+        color: Color::GOLD,
+        brightness: 0.75,
+    });
 
     commands
         .spawn(Collider::cuboid(1.0, 1.0, 1.0))

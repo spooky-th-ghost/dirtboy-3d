@@ -1,4 +1,4 @@
-use crate::Player;
+use crate::{Movement, Player};
 use bevy::prelude::*;
 
 pub struct CameraPlugin;
@@ -49,7 +49,7 @@ fn setup_camera(mut commands: Commands) {
 
 fn update_camera_target_position(
     mut camera_query: Query<&mut CameraController>,
-    player_query: Query<&Transform, With<Player>>,
+    player_query: Query<&Transform, (With<Player>, With<Movement>)>,
 ) {
     let mut camera = camera_query.single_mut();
     let player_transform = player_query.single();

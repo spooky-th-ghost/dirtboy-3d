@@ -9,9 +9,8 @@ impl Plugin for PhysicsPlugin {
             .register_type::<Movement>()
             .register_type::<Spring>()
             .add_system(handle_hover)
-            .add_system(handle_movement)
-            //            .add_system(drive_rotation)
-            .add_system(dumb_drag);
+            .add_system(handle_movement);
+        //            .add_system(drive_rotation)
     }
 }
 
@@ -132,7 +131,7 @@ pub fn handle_hover(
         {
             if springs.contains(entity) {
                 if let Ok((_, spring)) = springs.get(entity) {
-                    velocity.linvel.y = 0.0;
+                    // velocity.linvel.y = 0.0;
                     external_impulse.impulse = intersection.normal * spring.0;
                     return;
                 }
