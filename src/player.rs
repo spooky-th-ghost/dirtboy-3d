@@ -43,7 +43,7 @@ fn spawn_player(
         .insert(AnimationMarker::new("player", "idle"))
         .insert(RigidBody::Dynamic)
         .insert(Damping {
-            linear_damping: 2.5,
+            linear_damping: 1.5,
             ..default()
         })
         .insert(Velocity::default())

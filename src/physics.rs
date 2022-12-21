@@ -9,6 +9,7 @@ impl Plugin for PhysicsPlugin {
             .register_type::<Movement>()
             .register_type::<Spring>()
             .add_system(handle_hover)
+            .add_system(handle_rotation)
             .add_system(handle_movement);
         //            .add_system(drive_rotation)
     }
@@ -103,7 +104,6 @@ pub fn handle_hover(
         &mut Velocity,
         &Transform,
         &Hover,
-        Option<&mut RotationDriver>,
         Option<&Grounded>,
         Entity,
     )>,
@@ -115,7 +115,6 @@ pub fn handle_hover(
         mut velocity,
         transform,
         hover,
-        should_rotate,
         is_grounded,
         hover_entity,
     ) in &mut hover_query
@@ -139,9 +138,6 @@ pub fn handle_hover(
             external_force.force.y =
                 hover.calculate_spring_force(intersection.toi, velocity.linvel);
             if intersection.toi <= hover.ride_height {
-                if let Some(mut rotation_driver) = should_rotate {
-                    rotation_driver.up_vector = intersection.normal;
-                }
                 if let None = is_grounded {
                     commands.entity(hover_entity).insert(Grounded);
                 }
@@ -198,55 +194,14 @@ pub fn handle_movement(
     }
 }
 
-pub fn advanced_movement(
+fn handle_rotation(
     time: Res<Time>,
-    mut movement_query: Query<(&mut ExternalForce, &mut Movement, &Velocity)>,
+    mut query: Query<(&Movement, &mut Transform), With<RotationDriver>>,
 ) {
-    for (mut external_force, mut movement, velocity) in &mut movement_query {
-        let max_speed = 8.0;
-        let accel = 500.0;
-        let max_accel_force = 150.0;
-
-        let mut new_goal_vel = movement.direction.normalize_or_zero() * max_speed;
-        new_goal_vel.y = 0.0;
-        let updated_goal_velocity = move_towards(
-            movement.goal_velocity,
-            new_goal_vel + velocity.linvel,
-            accel * time.delta_seconds(),
-        );
-
-        if updated_goal_velocity.is_finite() {
-            movement.goal_velocity = updated_goal_velocity;
+    for (movement, mut transform) in &mut query {
+        if movement.direction != Vec3::ZERO {
+            let target = transform.translation - movement.direction;
+            transform.look_at(target, Vec3::Y);
         }
-
-        let required_accel = (movement.goal_velocity - velocity.linvel) / time.delta_seconds();
-
-        let mut final_accel = required_accel.clamp_length_max(max_accel_force);
-        final_accel.y = 0.0;
-        if final_accel.is_finite() {
-            external_force.force = final_accel;
-        }
-    }
-}
-
-fn move_towards(a: Vec3, b: Vec3, distance: f32) -> Vec3 {
-    let current_distance = a.distance(b);
-    if current_distance < distance {
-        b
-    } else {
-        a.lerp(b, distance / current_distance)
-    }
-}
-
-pub fn dumb_drag(
-    time: Res<Time>,
-    mut body_query: Query<(&mut Velocity, &Deceleration, &Movement)>,
-) {
-    for (mut velo, deceleration, movement) in &mut body_query {
-        let lerped_vector = velo
-            .linvel
-            .lerp(Vec3::ZERO, time.delta_seconds() * deceleration.0);
-        velo.linvel.x = lerped_vector.x;
-        velo.linvel.z = lerped_vector.z;
     }
 }
