@@ -1,9 +1,7 @@
-use crate::{
-    AnimationLibrary, AnimationMarker, AnimationTransitionEvent, Deceleration, Grounded, Hover,
-    Movement, RotationDriver,
-};
+use crate::{AnimationLibrary, AnimationMarker, AnimationTransitionEvent};
 use bevy::{prelude::*, utils::HashMap};
 use bevy_rapier3d::prelude::*;
+use yurei::prelude::*;
 
 pub struct PlayerPlugin;
 
@@ -41,26 +39,8 @@ fn spawn_player(
             ..default()
         })
         .insert(AnimationMarker::new("player", "idle"))
-        .insert(RigidBody::Dynamic)
-        .insert(Damping {
-            linear_damping: 1.5,
-            ..default()
-        })
-        .insert(Velocity::default())
-        .insert(ExternalForce::default())
-        .insert(ExternalImpulse::default())
-        .insert(LockedAxes::ROTATION_LOCKED)
-        .insert(Hover::default())
-        .insert(Movement {
-            goal_velocity: Vec3::ZERO,
-            direction: Vec3::ZERO,
-            acceleration: 500.0,
-        })
-        .insert(RotationDriver::default())
-        .insert(Deceleration::default())
+        .insert(YureiBundle::capsule_with_position(Vec3::ZERO))
         .insert(Player)
-        .insert(Collider::capsule_y(1.0, 1.0))
-        .insert(TransformBundle::from(Transform::from_xyz(0.0, 0.0, 0.0)))
         .insert(Name::new("Player"));
 }
 

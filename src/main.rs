@@ -2,6 +2,7 @@ use bevy::prelude::*;
 use bevy_inspector_egui::WorldInspectorPlugin;
 use bevy_rapier3d::prelude::*;
 use std::f32::consts::PI;
+use yurei::prelude::*;
 
 mod animation;
 use animation::*;
@@ -9,16 +10,13 @@ use animation::*;
 mod camera;
 use camera::*;
 
-mod physics;
-use physics::*;
-
 mod player;
 use player::*;
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+        .add_plugin(YureiPlugin)
         .add_plugin(RapierDebugRenderPlugin::default())
         .add_plugin(WorldInspectorPlugin::new())
         .insert_resource(RapierConfiguration {
@@ -26,7 +24,7 @@ fn main() {
             ..default()
         })
         .add_plugin(CameraPlugin)
-        .add_plugin(PhysicsPlugin)
+        //        .add_plugin(PhysicsPlugin)
         .add_plugin(PlayerPlugin)
         .add_plugin(SpookyAnimationPlugin)
         .add_startup_system(setup_physics)
@@ -64,7 +62,6 @@ fn setup_physics(
     commands
         .spawn(Collider::cuboid(5.0, 0.25, 5.0))
         .insert(RigidBody::Fixed)
-        .insert(Spring::default())
         .insert(PbrBundle {
             mesh: meshes.add(Mesh::from(shape::Box::new(10.0, 0.5, 10.0))),
             transform: Transform::from_xyz(-8.0, -1.0, 0.0),
@@ -76,13 +73,4 @@ fn setup_physics(
         color: Color::GOLD,
         brightness: 0.75,
     });
-
-    commands
-        .spawn(Collider::cuboid(1.0, 1.0, 1.0))
-        .insert(RigidBody::Dynamic)
-        .insert(Velocity::default())
-        .insert(ExternalForce::default())
-        .insert(Hover::default())
-        .insert(Deceleration(1.0))
-        .insert(TransformBundle::from(Transform::from_xyz(6.0, 0.0, 6.0)));
 }
